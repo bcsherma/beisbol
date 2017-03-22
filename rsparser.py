@@ -1,5 +1,8 @@
 import os
 import re
+import scipy
+import numpy
+import sklearn.linear_model
 from copy import deepcopy
 
 # get a list of files in the event directory
@@ -165,8 +168,36 @@ for line in files:
             res = 1 if result == outcome.walk else 0
             events.append([batter.code,pitcher.code,res])
 
-for [b,p,r] in events:
+i = len(events) - 1
+while i >= 0:
+    b = players[events[i][0]]
+    if b.pa < 200:
+        del events[i]
+        i -= 1
+        continue
+    p = players[events[i][1]]
+    if p.pa < 200:
+        del events[i]
+        i -= 1
+        continue
+    i -= 1
+
+# turn the data from player id's to their bb%
+for i,[b,p,r] in enumerate(events):
     b = players[b]
     p = players[p]
-    print(b.name,b.bb/b.pa)
-    #print(b.bb/b.pa,p.bb/p.pa,r)
+    events[i] = [b.bb/b.pa,p.bb/p.pa,r]
+
+training = events[:100000]
+# create the regression model
+regressor = sklearn.linear_model.LogisticRegression()
+X = numpy.array([e[:2] for e in training])
+y = numpy.array([e[2] for e in training])
+print('fitting')
+regressor.fit(X,y)
+print('done')
+test = events[100000:]
+predictions = regressor.predict_proba(numpy.array([e[:2] for e in test]))
+
+for i,t in enumerate(test):
+    print(t[:2],predictions[i][1])
