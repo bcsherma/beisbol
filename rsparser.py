@@ -15,6 +15,7 @@ class player(object):
         self.code = features[0]
         self.last = features[1]
         self.first = features[2]
+        self.name = ' '.join([self.first,self.last])
         self.bat = features[3]
         self.throw = features[4]
         self.team = features[5]
@@ -72,14 +73,13 @@ class outcome:
     walk = 5
     strikeout = 6
 
-
-single = re.compile(r'S[0-9]+')
-double = re.compile(r'D[0-9]+')
+error = re.compile(r'E[0-9]*|FC[0-9]+|C|HP')
+single = re.compile(r'S([0-9]*)')
+double = re.compile(r'D[0-9]+|DGR')
 triple = re.compile(r'T[0-9]+')
-homer = re.compile(r'[H|HR][0-9]*')
-walk = re.compile(r'[W|I|IW]')
-strikeout = re.compile(r'K')
-
+homer = re.compile(r'H[0-9]*|HR[0-9]*')
+walk = re.compile(r'W|IW|I')
+strikeout = re.compile(r'K[0-9]*')
 
 def getResult(line):
     if line[0].isdigit():
@@ -92,26 +92,29 @@ def getResult(line):
     line = line.strip()
     if not line or line == 'NP':
         return outcome.nothing
-    if single.match(line):
+    if error.fullmatch(line):
+        return outcome.out
+    if single.fullmatch(line):
         #print('single',line)
         return outcome.single
-    if double.match(line):
+    if double.fullmatch(line):
         #print('double',line)
         return outcome.double
-    if triple.match(line):
+    if triple.fullmatch(line):
         #print('triple',line)
         return outcome.triple
-    if homer.match(line):
+    if homer.fullmatch(line):
         #print('homer',line)
         return outcome.hr
-    if walk.match(line):
+    if walk.fullmatch(line):
         #print('walk',line)
         return outcome.walk
-    if strikeout.match(line):
+    if strikeout.fullmatch(line):
         #print('strikeout',line)
         return outcome.strikeout
     return outcome.nothing
 
+events = []
 
 # iterate over the events and sum up
 # everything that happens
@@ -130,7 +133,7 @@ for line in files:
     # check to see if there is a play
     if line[0] == 'play':
         result = getResult(line[6])
-        continue
+        if result == outcome.nothing: continue
         batter = players[line[3]]
         if batter.pos == 'P':
             batter = deepcopy(batter)
@@ -138,4 +141,32 @@ for line in files:
             pitcher = ap
         else:
             pitcher = hp
-        batter = players[line[3]]
+        batter.pa += 1
+        pitcher.pa += 1
+        if result == outcome.single:
+            batter.s += 1
+            pitcher.s += 1
+        elif result == outcome.double:
+            batter.d += 1
+            pitcher.d += 1
+        elif result == outcome.triple:
+            batter.t += 1
+            pitcher.t += 1
+        elif result == outcome.hr:
+            batter.hr += 1
+            pitcher.hr += 1
+        elif result == outcome.walk:
+            batter.bb += 1
+            pitcher.bb += 1
+        elif result == outcome.strikeout:
+            batter.k += 1
+            pitcher.k += 1
+        if batter.pos != 'P':
+            res = 1 if result == outcome.walk else 0
+            events.append([batter.code,pitcher.code,res])
+
+for [b,p,r] in events:
+    b = players[b]
+    p = players[p]
+    print(b.name,b.bb/b.pa)
+    #print(b.bb/b.pa,p.bb/p.pa,r)
