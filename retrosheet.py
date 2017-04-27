@@ -39,7 +39,6 @@ class player:
 		self.pFlyBalls = 0
 		self.pGroundBalls = 0
 
-
 	# takes an event as an argument and updates
 	def update(self,ev):
 		if ev.hitter == self:
@@ -97,6 +96,17 @@ class player:
 		elif c == event.line:
 			self.pLineDrives += 1
 
+	# return batting avg
+	def bAvg(self):
+		if self.bPlateAppearances - self.bWalks == 0:
+			return 0.0
+		return (
+			self.bSingles +
+			self.bDoubles +
+			self.bTriples +
+			self.bHomers
+		) / (self.bPlateAppearances - self.bWalks)
+
 	# return a string representation
 	def __repr__(self):
 		return '{} {} {} {}'.format(
@@ -131,12 +141,12 @@ gbStr 		= re.compile(r'BG[\w]*|G[\w]*')
 ldStr 		= re.compile(r'BL[\w]*|L[\w]*')
 fbStr 		= re.compile(r'BP[\w]*|F|FDP|IF|P|SF')
 outStr 		= re.compile(r'[0-9].*|E[0-9]+|FC[0-9]+|FLE[0-9]+')
-singleStr	= re.compile(r'S[0-9]+')
-doubleStr 	= re.compile(r'D[0-9]+|DGR[0-9]*')
-tripleStr 	= re.compile(r'T[0-9]+')
+singleStr	= re.compile(r'S[0-9]*')
+doubleStr 	= re.compile(r'D[0-9]*|DGR[0-9]*')
+tripleStr 	= re.compile(r'T[0-9]*')
 homerStr 	= re.compile(r'H[R]?[0-9]*')
 kStr 		= re.compile(r'K.*')
-walkStr 	= re.compile(r'HP|IW?|W')
+walkStr 	= re.compile(r'I|IW|W')
 
 # a data structure for storing the details of an event
 # in a game of baseball
@@ -301,7 +311,6 @@ class game:
 					)
 				except:
 					pass
-			
 
 # given a RS directory return all events from the season
 def getGames(directory,players):
@@ -336,4 +345,6 @@ if __name__ == '__main__':
 	from sys import argv as args
 	players = getPlayers(args[1])
 	games = getGames(args[1],players)
+	for pid,p in players.items():
+		print(p,p.bPlateAppearances,p.bSingles,p.bDoubles,p.bTriples,p.bHomers,p.bWalks,p.bStrikeouts)
 	
