@@ -11,6 +11,91 @@ class player:
 		self.throws = throws
 		self.team = team
 		self.pos = pos
+		self.initStats()
+
+	# initialize statistics fields
+	def initStats(self):
+		self.games = set()
+		# offensive categories
+		self.bPlateAppearances = 0
+		self.bSingles = 0
+		self.bDoubles = 0
+		self.bTriples = 0
+		self.bHomers = 0
+		self.bWalks = 0
+		self.bStrikeouts = 0
+		self.bLineDrives = 0
+		self.bFlyBalls = 0
+		self.bGroundBalls = 0
+		# pitching categories
+		self.pPlateAppearances = 0
+		self.pSingles = 0
+		self.pDoubles = 0
+		self.pTriples = 0
+		self.pHomers = 0
+		self.pWalks = 0
+		self.pStrikeouts = 0
+		self.pLineDrives = 0
+		self.pFlyBalls = 0
+		self.pGroundBalls = 0
+
+
+	# takes an event as an argument and updates
+	def update(self,ev):
+		if ev.hitter == self:
+			self.offensiveIncrement(ev)
+		elif ev.pitcher == self:
+			self.defensiveIncrement(ev)
+		else:
+			raise
+
+	# increment offensive stats
+	def offensiveIncrement(self,ev):
+		o = ev.outcome
+		self.bPlateAppearances += 1
+		if o == event.single:
+			self.bSingles += 1
+		elif o == event.double:
+			self.bDoubles += 1
+		elif o == event.triple:
+			self.bTriples += 1
+		elif o == event.hr:
+			self.bHomers += 1
+		elif o == event.k:
+			self.bStrikeouts += 1
+		elif o == event.bb:
+			self.bWalks += 1
+		c = ev.contact
+		if c == event.fly:
+			self.bFlyBalls += 1
+		elif c == event.ground:
+			self.bGroundBalls += 1
+		elif c == event.line:
+			self.bLineDrives += 1
+
+	# increment pitching stats
+	def defensiveIncrement(self,ev):
+		o = ev.outcome
+		self.pPlateAppearances += 1
+		if o == event.single:
+			self.pSingles += 1
+		elif o == event.double:
+			self.pDoubles += 1
+		elif o == event.triple:
+			self.pTriples += 1
+		elif o == event.hr:
+			self.pHomers += 1
+		elif o == event.k:
+			self.pStrikeouts += 1
+		elif o == event.bb:
+			self.pWalks += 1
+		c = ev.contact
+		if c == event.fly:
+			self.pFlyBalls += 1
+		elif c == event.ground:
+			self.pGroundBalls += 1
+		elif c == event.line:
+			self.pLineDrives += 1
 
 	# return a string representation
 	def __repr__(self):
@@ -20,7 +105,10 @@ class player:
 
 	# compare this player to another player
 	def __eq__(self,other):
-		return self.id == other.id
+		if isinstance(other,player):
+			return self.id == other.id
+		if isinstance(other,str):
+			return self.id == other
 
 # given a RS directory return the players
 # from the season
@@ -44,7 +132,7 @@ ldStr 		= re.compile(r'BL[\w]*|L[\w]*')
 fbStr 		= re.compile(r'BP[\w]*|F|FDP|IF|P|SF')
 outStr 		= re.compile(r'[0-9].*|E[0-9]+|FC[0-9]+|FLE[0-9]+')
 singleStr	= re.compile(r'S[0-9]+')
-doubleStr 	= re.compile(r'D[0-9]+|DGR')
+doubleStr 	= re.compile(r'D[0-9]+|DGR[0-9]*')
 tripleStr 	= re.compile(r'T[0-9]+')
 homerStr 	= re.compile(r'H[R]?[0-9]*')
 kStr 		= re.compile(r'K.*')
@@ -68,8 +156,26 @@ class event:
 	ground 	= 3
 	line 	= 4
 
+	# hash outcomes to values
+	outcomeTable = {
+		0: 'out',
+		1: 'single',
+		2: 'double',
+		3: 'triple',
+		4: 'home-run',
+		5: 'strikeout',
+		6: 'walk'
+	}
+	# contact table
+	contactTable = {
+		1: 'none',
+		2: 'fly ball',
+		3: 'ground ball',
+		4: 'line drive'
+	}
+
 	# constructor
-	def __init__(self,id,hitter,pitcher,count,seq,outcome):
+	def __init__(self,id,players,hitter,pitcher,count,seq,outcome):
 		# save the id of the game this event happens in
 		self.game = id
 		# save pitcher and hitter during this event
@@ -108,10 +214,19 @@ class event:
 			self.outcome = event.triple
 		elif homerStr.fullmatch(result):
 			self.outcome = event.hr
+			self.contact = event.fly
+		else:
+			raise
+		players[pitcher].update(self)
+		players[hitter].update(self)
 
-
-
-
+	def __repr__(self):
+		return 'pitcher:{} hitter:{} result:{} contact:{}'.format(
+			self.pitcher,
+			self.hitter,
+			event.outcomeTable[self.outcome],
+			event.contactTable[self.contact]
+		)
 
 # data structure for storing all information about
 # a single baseball game
@@ -120,6 +235,15 @@ class game:
 	def __init__(self,events,players):
 		# process the event log
 		self.processEvents(events,players)
+
+	# print the event summary
+	def __repr__(self):
+		return '{} vs. {} W:{} L:{}'.format(
+			self.info['hometeam'],
+			self.info['visteam'],
+			self.info['wp'],
+			self.info['lp']
+		)
 	
 	def processEvents(self,events,players):
 		# this dictionary will contain information about
@@ -163,16 +287,27 @@ class game:
 				else:
 					pitcher = homepitcher
 				# add a new event to the game
-				self.events.append(
-					event(self.id,hitter,pitcher,count,seq,outcome)
-				)
+				try:
+					self.events.append(
+						event(
+							self.id,
+							players,
+							hitter,
+							pitcher,
+							count,
+							seq,
+							outcome
+						)
+					)
+				except:
+					pass
 			
 
 # given a RS directory return all events from the season
 def getGames(directory,players):
 	# make sure this directory exists
 	assert os.path.isdir(directory)
-	files = [	
+	files = [
 		directory+'/'+f for f in os.listdir(directory) \
 		if f.endswith('.EVN') or f.endswith('.EVA')
 	]
@@ -193,11 +328,12 @@ def getGames(directory,players):
 			games.append(game(events[index:stop],players))
 		# increment
 		index += 1
+	# return the game list as a hashtable where a games id
+	# hashes to the stored game object
 	return {g.id:g for g in games}
 
-
 if __name__ == '__main__':
-	players = getPlayers('2009eve')
-	games = getGames('2009eve',players)
+	from sys import argv as args
+	players = getPlayers(args[1])
+	games = getGames(args[1],players)
 	
-

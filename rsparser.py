@@ -4,12 +4,8 @@ import scipy
 import numpy
 import sklearn.linear_model
 from copy import deepcopy
-
-# get a list of files in the event directory
-files = os.listdir('2016eve')
-# open and read the rosters
-pfiles = [f for f in files if f[-4:] == '.ROS']
-pfiles = [open('2016eve/'+f).readlines() for f in pfiles]
+from sys import argv as args
+import matplotlib.pyplot as plt
 
 # object for storing player information
 class player(object):
@@ -31,38 +27,6 @@ class player(object):
         self.t = 0
         self.hr = 0
         self.pa = 0
-
-# initialize an empty dictionaries of players
-# keys are the player code
-players = {}
-
-# for every line of the file
-# try to initialize a player if we
-# haven't already created that player
-# for a different team
-for f in pfiles:
-    for p in f:
-        tmp = player(p.strip().split(','))
-        if tmp.code in players:
-            continue
-        players[tmp.code] = tmp
-
-# cull the list of files to only be
-# event files
-files = [
-    f for f in files if f[-4:] == '.EVA' or f[-4:] == '.EVN'
-]
-files = [open('2016eve/'+f).readlines() for f in files]
-# concatenate all the events into one list
-files = sum(files,[])
-
-
-# these variables are used to keep track
-# of the current batter, home pitcher,
-# and visiting pitcher
-hp = None
-ap = None
-batter = None
 
 # an enumeration of the outcomes we
 # want to want to track
@@ -116,88 +80,181 @@ def getResult(line):
         #print('strikeout',line)
         return outcome.strikeout
     return outcome.nothing
+# given name of retrosheet directory
+# return player table, event list
+def parseFiles(dirname):
+    # get a list of files in the event directory
+    files = os.listdir(dirname)
+    # open and read the rosters
+    pfiles = [f for f in files if f[-4:] == '.ROS']
+    pfiles = [open(dirname+'/'+f).readlines() for f in pfiles]
+    # initialize an empty dictionaries of players
+    # keys are the player code
+    players = {}
 
-events = []
+    # for every line of the file
+    # try to initialize a player if we
+    # haven't already created that player
+    # for a different team
+    for f in pfiles:
+        for p in f:
+            tmp = player(p.strip().split(','))
+            if tmp.code in players:
+                continue
+            players[tmp.code] = tmp
 
-# iterate over the events and sum up
-# everything that happens
-for line in files:
-    line = line.split(',')
-    # check to see if there is a roster change
-    if line[0] in {'start','sub'}:
-        if players[line[1]].pos == 'P':
-            if line[3] == '0':
-                ap = players[line[1]]
+    # cull the list of files to only be
+    # event files
+    files = [
+        f for f in files if f[-4:] == '.EVA' or f[-4:] == '.EVN'
+    ]
+    files = [open(dirname+'/'+f).readlines() for f in files]
+    # concatenate all the events into one list
+    files = sum(files,[])
+    # these variables are used to keep track
+    # of the current batter, home pitcher,
+    # and visiting pitcher
+    hp = None
+    ap = None
+    batter = None
+    events = []
+    # iterate over the events and sum up
+    # everything that happens
+    for line in files:
+        line = line.split(',')
+        # check to see if there is a roster change
+        if line[0] in {'start','sub'}:
+            if players[line[1]].pos == 'P':
+                if line[3] == '0':
+                    ap = players[line[1]]
+                else:
+                    hp = players[line[1]]
+            # keep track of whether or not the current
+            # player is a home player or not
+            players[line[1]].home = line[3]
+        # check to see if there is a play
+        if line[0] == 'play':
+            result = getResult(line[6])
+            if result == outcome.nothing: continue
+            batter = players[line[3]]
+            if batter.pos == 'P':
+                batter = deepcopy(batter)
+            if batter.home == '1':
+                pitcher = ap
             else:
-                hp = players[line[1]]
-        # keep track of whether or not the current
-        # player is a home player or not
-        players[line[1]].home = line[3]
-    # check to see if there is a play
-    if line[0] == 'play':
-        result = getResult(line[6])
-        if result == outcome.nothing: continue
-        batter = players[line[3]]
-        if batter.pos == 'P':
-            batter = deepcopy(batter)
-        if batter.home == '1':
-            pitcher = ap
-        else:
-            pitcher = hp
-        batter.pa += 1
-        pitcher.pa += 1
-        if result == outcome.single:
-            batter.s += 1
-            pitcher.s += 1
-        elif result == outcome.double:
-            batter.d += 1
-            pitcher.d += 1
-        elif result == outcome.triple:
-            batter.t += 1
-            pitcher.t += 1
-        elif result == outcome.hr:
-            batter.hr += 1
-            pitcher.hr += 1
-        elif result == outcome.walk:
-            batter.bb += 1
-            pitcher.bb += 1
-        elif result == outcome.strikeout:
-            batter.k += 1
-            pitcher.k += 1
-        if batter.pos != 'P':
-            res = 1 if result == outcome.walk else 0
-            events.append([batter.code,pitcher.code,res])
-
-i = len(events) - 1
-while i >= 0:
-    b = players[events[i][0]]
-    if b.pa < 200:
-        del events[i]
+                pitcher = hp
+            batter.pa += 1
+            pitcher.pa += 1
+            if result == outcome.single:
+                batter.s += 1
+                pitcher.s += 1
+            elif result == outcome.double:
+                batter.d += 1
+                pitcher.d += 1
+            elif result == outcome.triple:
+                batter.t += 1
+                pitcher.t += 1
+            elif result == outcome.hr:
+                batter.hr += 1
+                pitcher.hr += 1
+            elif result == outcome.walk:
+                batter.bb += 1
+                pitcher.bb += 1
+            elif result == outcome.strikeout:
+                batter.k += 1
+                pitcher.k += 1
+            if batter.pos != 'P':
+                res = 1 if result == outcome.walk else 0
+                events.append([batter.code,pitcher.code,res])
+    i = len(events) - 1
+    while i >= 0:
+        b = players[events[i][0]]
+        if b.pa < 300:
+            del events[i]
+            i -= 1
+            continue
+        p = players[events[i][1]]
+        if p.pa < 300:
+            del events[i]
+            i -= 1
+            continue
         i -= 1
-        continue
-    p = players[events[i][1]]
-    if p.pa < 200:
-        del events[i]
-        i -= 1
-        continue
-    i -= 1
+    old_events = deepcopy(events)
+    # turn the data from player id's to their bb%
+    for i,[b,p,r] in enumerate(events):
+        b = players[b]
+        p = players[p]
+        # this is where we change the features
+        b_bb = b.bb/b.pa
+        p_bb = p.bb/p.pa
+        b_avg = (b.s + b.d + b.t + b.hr)/b.pa
+        p_avg = (p.s + p.d + p.t + p.hr)/p.pa
+        b_k = b.k/b.pa
+        p_k = p.k/p.pa
+        events[i] = [b_bb,p_bb,r]
+    return(players,events,old_events)
 
-# turn the data from player id's to their bb%
-for i,[b,p,r] in enumerate(events):
-    b = players[b]
-    p = players[p]
-    events[i] = [b.bb/b.pa,p.bb/p.pa,r]
+# train the model
+def train(model,training):
+    X = numpy.array([e[:-1] for e in training])
+    y = numpy.array([e[-1] for e in training])
+    model.fit(X,y)
 
-training = events[:100000]
-# create the regression model
-regressor = sklearn.linear_model.LogisticRegression()
-X = numpy.array([e[:2] for e in training])
-y = numpy.array([e[2] for e in training])
-print('fitting')
-regressor.fit(X,y)
-print('done')
-test = events[100000:]
-predictions = regressor.predict_proba(numpy.array([e[:2] for e in test]))
+def evaluate(model,players,events,old_events):
+    predictions = model.predict_proba(
+        numpy.array([e[:-1] for e in events])
+    )
+    accuracy = []
+    for p in players:
+        if players[p].pa < 300:
+            continue
+        outcomes = []
+        for i,e in enumerate(old_events):
+            if p in e:
+                outcomes.append(predictions[i][1])
+        accuracy.append(
+            [   sum(outcomes)/len(outcomes),
+                players[p].bb/players[p].pa
+            ]
+        )
+    s_accuracy = [a[0]-a[1] for a in accuracy]
+    s_accuracy = numpy.array([abs(a) for a in s_accuracy])
+    mean = 100*numpy.mean(s_accuracy)
+    std = 100*numpy.std(s_accuracy)
+    max_err = 100*max(s_accuracy)
+    print('avg error {:.3f}'.format(mean))
+    print('std dev of error {:.3f}'.format(std))
+    print('max error {:.3f}'.format(max_err))
+    x = [100*a[0] for a in accuracy]
+    y = [100*a[1] for a in accuracy]
+    plt.xlabel('projection')
+    plt.ylabel('known bb%')
+    plt.grid(True)
+    x_p = plt.xlim(min(x+y),max(x+y))
+    y_p = plt.ylim(min(x+y),max(x+y))
+    plt.plot(x_p,y_p,'r--')
+    plt.scatter(x,y,alpha=0.2)
+    plt.title(
+        'train_year={}   test_year={}\n'\
+        'mean_err={:.3f}   std_dev_err={:.3f}   max_err={:.3f}'\
+            .format(
+            args[1][:4],
+            args[2][:4],
+            mean,
+            std,
+            max_err
+        )
+    )
+    plt.show()
 
-for i,t in enumerate(test):
-    print(t[:2],predictions[i][1])
+if __name__ == '__main__':
+    players,events,old_events = parseFiles(args[1])
+    # create the regression model
+    regressor = \
+        sklearn.linear_model.LogisticRegression(
+            verbose=1,
+            penalty='l1'
+        )
+    train(regressor,events)
+    players,events,old_events = parseFiles(args[2])
+    evaluate(regressor,players,events,old_events)
