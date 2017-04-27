@@ -36,13 +36,82 @@ def getPlayers(directory):
 	players = [player(*p) for p in playerSrc]
 	return {p.id:p for p in players}
 
+# regular expressions for event parsing
+eventStr 	= re.compile(r'([\w]+)[;/()+-]?')
+modifierStr = re.compile(r'/([\w]+)')
+gbStr 		= re.compile(r'BG[\w]*|G[\w]*')
+ldStr 		= re.compile(r'BL[\w]*|L[\w]*')
+fbStr 		= re.compile(r'BP[\w]*|F|FDP|IF|P|SF')
+outStr 		= re.compile(r'[0-9].*|E[0-9]+|FC[0-9]+|FLE[0-9]+')
+singleStr	= re.compile(r'S[0-9]+')
+doubleStr 	= re.compile(r'D[0-9]+|DGR')
+tripleStr 	= re.compile(r'T[0-9]+')
+homerStr 	= re.compile(r'H[R]?[0-9]*')
+kStr 		= re.compile(r'K.*')
+walkStr 	= re.compile(r'HP|IW?|W')
+
 # a data structure for storing the details of an event
 # in a game of baseball
 class event:
+	# static fields for ab result
+	out 	= 0
+	single 	= 1
+	double 	= 2
+	triple 	= 3
+	hr 		= 4
+	k 		= 5
+	bb 		= 6
+	
+	# ab results for contact
+	none 	= 1
+	fly 	= 2
+	ground 	= 3
+	line 	= 4
+
 	# constructor
-	def __init__(self,hitter,pitcher,count,seq,outcome):
-		print(hitter,pitcher,outcome)
-		pass
+	def __init__(self,id,hitter,pitcher,count,seq,outcome):
+		# save the id of the game this event happens in
+		self.game = id
+		# save pitcher and hitter during this event
+		self.pitcher = pitcher
+		self.hitter = hitter
+		# assume no contact
+		self.contact = event.none
+		# match the event string
+		result = eventStr.match(outcome)
+		contact = modifierStr.search(outcome)
+		# assert the event string is valid
+		assert result is not None
+		result = result.group(1)
+		# if there is contact figure out what kind
+		if contact is not None:
+			contact = contact.group(1)
+			if gbStr.fullmatch(contact):
+				self.contact = event.ground
+			elif ldStr.fullmatch(contact):
+				self.contact = event.line
+			elif fbStr.fullmatch(contact):
+				self.contact= event.fly
+		# check for all at bat outcomes, assuming either 
+		# a batted ball, k, or walk
+		if outStr.fullmatch(result):
+			self.outcome = event.out
+		elif kStr.fullmatch(result):
+			self.outcome = event.k
+		elif walkStr.fullmatch(result):
+			self.outcome = event.bb
+		elif singleStr.fullmatch(result):
+			self.outcome = event.single
+		elif doubleStr.fullmatch(result):
+			self.outcome = event.double
+		elif tripleStr.fullmatch(result):
+			self.outcome = event.triple
+		elif homerStr.fullmatch(result):
+			self.outcome = event.hr
+
+
+
+
 
 # data structure for storing all information about
 # a single baseball game
@@ -68,7 +137,7 @@ class game:
 		# information about the game
 		for e in events:
 			e = e.strip().split(',')
-			if e[0] == [id]:
+			if e[0] == 'id':
 				self.id = e[1]
 			# add this to the info dictioanry
 			elif e[0] == 'info':
@@ -95,12 +164,12 @@ class game:
 					pitcher = homepitcher
 				# add a new event to the game
 				self.events.append(
-					event(hitter,pitcher,count,seq,outcome)
+					event(self.id,hitter,pitcher,count,seq,outcome)
 				)
 			
 
 # given a RS directory return all events from the season
-def getEvents(directory,players):
+def getGames(directory,players):
 	# make sure this directory exists
 	assert os.path.isdir(directory)
 	files = [	
@@ -124,8 +193,11 @@ def getEvents(directory,players):
 			games.append(game(events[index:stop],players))
 		# increment
 		index += 1
+	return {g.id:g for g in games}
+
 
 if __name__ == '__main__':
 	players = getPlayers('2009eve')
-	events = getEvents('2009eve',players)
+	games = getGames('2009eve',players)
+	
 
