@@ -1,3 +1,3 @@
 # beisbol
 
-## A workspace for me to try all kinds of weird stuff
+## Logistic regression for walk rate prediction using retrosheet data.
